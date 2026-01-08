@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -18,8 +19,16 @@ decodeTest file = testCase file $ do
 
 main :: IO ()
 main =
-  defaultMain . testGroup "decoding" $
-    [ decodeTest @Challenge "test/challenge",
-      decodeTest @TrackData "test/getUrlSuccess",
-      decodeTest @SearchResponse "test/search"
+  defaultMain . testGroup "" $
+    [ testGroup
+        "decoding"
+        [ decodeTest @Challenge "test/challenge",
+          decodeTest @TrackData "test/getUrlSuccess",
+          decodeTest @SearchResponse "test/search"
+        ],
+      testCase
+        "challenge solving"
+        $ do
+          challenge <- read <$> readFile "test/challenge"
+          solveChallenge challenge @?= "VXMwW2qPfW2gkCNSl1i708NJkDghtAyU:67661164"
     ]

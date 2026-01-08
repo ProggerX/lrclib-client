@@ -114,7 +114,7 @@ solveChallenge Challenge {prefix, target} = go 0
   where
     prefix' = encodeUtf8 prefix
     target' = fromRight (error "Can't decode target from crypto-challenge") $ B16.decode $ encodeUtf8 target
-    go :: Integer -> Text
+    go :: Int -> Text
     go n | hash (prefix' <> BC.pack (show n)) < target' = prefix <> ":" <> T.show n
     go n = go (n + 1)
 
