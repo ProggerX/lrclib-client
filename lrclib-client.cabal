@@ -12,9 +12,9 @@ homepage:           https://github.com/proggerx/lrclib-client
 bug-reports:        https://github.com/proggerx/lrclib-client/issues
 license:            GPL-3.0-only
 license-file:       LICENSE
-author:             ProggerX <x@proggers.ru>
-maintainer:         ProggerX <x@proggers.ru>
-copyright:          2026 Progger X <x@proggers.ru>
+author:             Sand Gurt <x@proggers.ru>
+maintainer:         Sand Gurt <x@proggers.ru>
+copyright:          2026 Sand Gurt <x@proggers.ru>
 category:           Music, Web, API
 build-type:         Simple
 
