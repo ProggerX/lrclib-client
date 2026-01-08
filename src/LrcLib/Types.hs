@@ -35,7 +35,7 @@ data Challenge
   { prefix :: Text,
     target :: Text
   }
-  deriving (A.FromJSON, Generic)
+  deriving (A.FromJSON, Generic, Eq, Show, Read)
 
 -- | Track data that is accepted when getting lyrics
 data TrackData
@@ -49,7 +49,7 @@ data TrackData
     plainLyrics :: Maybe Text,
     syncedLyrics :: Maybe Text
   }
-  deriving (A.FromJSON, Generic)
+  deriving (A.FromJSON, Generic, Eq, Read)
 
 -- | Response when getting lyrics
 data GetResponse
