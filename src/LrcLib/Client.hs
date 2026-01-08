@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -112,12 +110,12 @@ publish' token request = do
 
 -- | Solve proof-of-work challenge for publish
 solveChallenge :: Challenge -> Text
-solveChallenge Challenge {challengePrefix, challengeTarget} = go 0
+solveChallenge Challenge {prefix, target} = go 0
   where
-    prefix' = encodeUtf8 challengePrefix
-    target' = fromRight (error "Can't decode target from crypto-challenge") $ B16.decode $ encodeUtf8 challengeTarget
+    prefix' = encodeUtf8 prefix
+    target' = fromRight (error "Can't decode target from crypto-challenge") $ B16.decode $ encodeUtf8 target
     go :: Integer -> Text
-    go n | hash (prefix' <> BC.pack (show n)) < target' = challengePrefix <> ":" <> T.show n
+    go n | hash (prefix' <> BC.pack (show n)) < target' = prefix <> ":" <> T.show n
     go n = go (n + 1)
 
 -- | Publish Lyrics (request and solve challenge)
