@@ -42,6 +42,7 @@ library
   default-language: GHC2021
 
 test-suite test
+  import: warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Main.hs
