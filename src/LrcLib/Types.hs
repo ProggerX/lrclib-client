@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module LrcLib.Types
   ( API,
@@ -31,44 +32,24 @@ type API = ReaderT Url IO
 -- | Crypto proof-of-work challenge for publish
 data Challenge
   = Challenge
-  { challengePrefix :: Text,
-    challengeTarget :: Text
+  { prefix :: Text,
+    target :: Text
   }
-  deriving (Generic)
-
-instance A.FromJSON Challenge where
-  parseJSON = A.withObject "Challenge" $
-    \v ->
-      Challenge
-        <$> v A..: "prefix"
-        <*> v A..: "target"
+  deriving (A.FromJSON, Generic)
 
 -- | Track data that is accepted when getting lyrics
 data TrackData
   = TrackData
-  { trackId :: Integer,
+  { id :: Integer,
     trackName :: Text,
-    trackArtist :: Text,
-    trackAlbum :: Text,
-    trackDuration :: Integer,
-    trackInstrumental :: Bool,
-    trackPlainLyrics :: Maybe Text,
-    trackSyncedLyrics :: Maybe Text
+    artistName :: Text,
+    albumName :: Text,
+    duration :: Integer,
+    instrumental :: Bool,
+    plainLyrics :: Maybe Text,
+    syncedLyrics :: Maybe Text
   }
-  deriving (Generic)
-
-instance A.FromJSON TrackData where
-  parseJSON = A.withObject "TrackData" $
-    \v ->
-      TrackData
-        <$> v A..: "id"
-        <*> v A..: "trackName"
-        <*> v A..: "artistName"
-        <*> v A..: "albumName"
-        <*> v A..: "duration"
-        <*> v A..: "instrumental"
-        <*> v A..:? "plainLyrics"
-        <*> v A..:? "syncedLyrics"
+  deriving (A.FromJSON, Generic)
 
 -- | Response when getting lyrics
 data GetResponse
@@ -79,14 +60,14 @@ data GetResponse
 -- | Representation of request for publishing lyrics
 data PublishRequest
   = PublishRequest
-  { pubName :: Text,
-    pubArtist :: Text,
-    pubAlbum :: Text,
-    pubDuration :: Integer,
-    pubLyrics :: Maybe Text,
-    pubSyncedLyrics :: Maybe Text
+  { trackName :: Text,
+    artistName :: Text,
+    albumName :: Text,
+    duration :: Integer,
+    plainLyrics :: Maybe Text,
+    syncedLyrics :: Maybe Text
   }
-  deriving (Generic)
+  deriving (Generic, A.ToJSON)
 
 -- | Response when publishing lyrics
 data PublishResponse = PublishOK | IncorrectToken
@@ -104,26 +85,15 @@ data SearchQuery
 type SearchResponse = [TrackData]
 
 instance Show TrackData where
-  show TrackData {trackId, trackName, trackArtist, trackAlbum} =
+  show track =
     T.unpack $
       T.concat
         [ "Track, id: ",
-          T.show trackId,
+          T.show track.id,
           ", name: ",
-          trackName,
+          track.trackName,
           ", artist: ",
-          trackArtist,
+          track.artistName,
           ", album: ",
-          trackAlbum
+          track.albumName
         ]
-
-instance A.ToJSON PublishRequest where
-  toJSON PublishRequest {..} =
-    A.object
-      [ "trackName" A..= pubName,
-        "artistName" A..= pubArtist,
-        "albumName" A..= pubAlbum,
-        "duration" A..= pubDuration,
-        "plainLyrics" A..= pubLyrics,
-        "syncedLyrics" A..= pubSyncedLyrics
-      ]
