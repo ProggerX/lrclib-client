@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -26,18 +27,18 @@ import Data.ByteString.Char8 qualified as BC
 import Data.ByteString.Lazy (ByteString)
 import Data.Either (fromRight)
 import Data.Foldable (toList)
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
+import GHC.Stack
 import LrcLib.Types
 import Network.Wreq
 import Prelude hiding (id)
 
-decode :: (A.FromJSON a) => ByteString -> a
-decode =
-  fromMaybe (error "Incorrect reply from server")
-    . A.decode
+decode :: (A.FromJSON a, HasCallStack) => ByteString -> a
+decode x = case A.eitherDecode x of
+  Left err -> error $ "Error while decoding JSON: " <> err
+  Right y -> y
 
 getUrl :: String -> Text -> Text -> Text -> Integer -> API GetResponse
 getUrl url track artist album duration = do
@@ -46,7 +47,7 @@ getUrl url track artist album duration = do
   case resp ^. responseStatus . statusCode of
     404 -> pure NotFound
     200 -> pure $ OK $ decode (resp ^. responseBody)
-    _ -> error "Unexpected status code on get endpoint"
+    s -> error $ "Unexpected status code on get endpoint: " <> show s
   where
     opts =
       defaults &~ do
@@ -103,7 +104,7 @@ publish' token request = do
   case res ^. responseStatus . statusCode of
     400 -> pure IncorrectToken
     201 -> pure PublishOK
-    _ -> error "Unexpected status code on publish endpoint"
+    s -> error $ "Unexpected status code on publish endpoint: " <> show s
   where
     body = A.toJSON request
     opts = defaults & header "X-Publish-Token" .~ [encodeUtf8 token]
