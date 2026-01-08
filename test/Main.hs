@@ -29,6 +29,6 @@ main =
       testCase
         "challenge solving"
         $ do
-          challenge <- read <$> readFile "test/challenge"
-          solveChallenge challenge @?= "VXMwW2qPfW2gkCNSl1i708NJkDghtAyU:67661164"
+          let challenge = Challenge {prefix = "PREFIX", target = "000000FF00000000000000000000000000000000000000000000000000000000"}
+          solveChallenge challenge @?= "PREFIX:1944868"
     ]
