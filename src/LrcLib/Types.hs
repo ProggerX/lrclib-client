@@ -64,8 +64,8 @@ data PublishRequest
     artistName :: Text,
     albumName :: Text,
     duration :: Integer,
-    plainLyrics :: Maybe Text,
-    syncedLyrics :: Maybe Text
+    plainLyrics :: Text,
+    syncedLyrics :: Text
   }
   deriving (Generic, A.ToJSON)
 
