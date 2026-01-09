@@ -70,8 +70,9 @@ getUrl url track artist album duration = do
         param "album_name" .= [album]
         param "duration" .= [T.pack $ show duration]
 
-getLyrics, getCachedLyrics ::
-  Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
+getLyrics,
+  getCachedLyrics ::
+    Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
 
 -- | Get lyrics by track name, artist, album and duration
 -- Calls @\/api\/get@
@@ -121,13 +122,6 @@ searchLyrics q = do
           param "track_name" .= [queryName]
           param "artist_name" .= toList queryArtist
           param "album_name" .= toList queryAlbum
-
--- | Request proof-of-work challenge for publish
-requestChallenge :: API Challenge
-requestChallenge = do
-  url <- ask
-  resp <- liftIO $ post (url <> "/request-challenge") $ A.toJSON ()
-  pure $ decode (resp ^. responseBody)
 
 -- | Publish Lyrics ('publish') without requesting and solving challenge
 -- Calls @\/api\/publish@
