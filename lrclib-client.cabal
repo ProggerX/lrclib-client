@@ -1,7 +1,7 @@
 cabal-version:      3.0
 
 name:               lrclib-client
-version:            0.2.2
+version:            0.2.3
 synopsis:           A Haskell client for the LrcLib API (lyrics database)
 description:
   This library provides types and functions to interact with the
