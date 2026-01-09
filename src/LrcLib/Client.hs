@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -40,13 +39,15 @@ decode x = case A.eitherDecode x of
   Left err -> error $ "Error while decoding JSON: " <> err
   Right y -> y
 
-getUrl :: String -> Text -> Text -> Text -> Integer -> API GetResponse
+getUrl ::
+  (HasCallStack) =>
+  String -> Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
 getUrl url track artist album duration = do
   apiUrl <- ask
   resp <- liftIO $ getWith opts $ apiUrl <> url
   case resp ^. responseStatus . statusCode of
-    404 -> pure NotFound
-    200 -> pure $ OK $ decode (resp ^. responseBody)
+    404 -> pure $ Left NotFound
+    200 -> pure $ Right $ decode (resp ^. responseBody)
     s -> error $ "Unexpected status code on get endpoint: " <> show s
   where
     opts =
@@ -56,7 +57,8 @@ getUrl url track artist album duration = do
         param "album_name" .= [album]
         param "duration" .= [T.pack $ show duration]
 
-getLyrics, getCachedLyrics :: Text -> Text -> Text -> Integer -> API GetResponse
+getLyrics, getCachedLyrics ::
+  Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
 
 -- | Get lyrics by track name, artist, album and duration
 getLyrics = getUrl "/get"
@@ -65,13 +67,13 @@ getLyrics = getUrl "/get"
 getCachedLyrics = getUrl "/get-cached"
 
 -- | Get lyrics by id
-getLyricsById :: Integer -> API GetResponse
-getLyricsById id' = do
+getLyricsById :: (HasCallStack) => Integer -> API (Either GetError TrackData)
+getLyricsById id = do
   url <- ask
-  resp <- liftIO $ get $ url <> "/get/" <> show id'
+  resp <- liftIO $ get $ url <> "/get/" <> show id
   case resp ^. responseStatus . statusCode of
-    404 -> pure NotFound
-    200 -> pure $ OK $ decode (resp ^. responseBody)
+    404 -> pure $ Left NotFound
+    200 -> pure $ Right $ decode (resp ^. responseBody)
     _ -> error "Unexpected status code on get endpoint"
 
 -- | Search lyrics by either text query or track-artist-album
@@ -97,13 +99,14 @@ requestChallenge = do
   pure $ decode (resp ^. responseBody)
 
 -- | Publish Lyrics (without requesting and solving challenge)
-publish' :: Text -> PublishRequest -> API PublishResponse
+publish' ::
+  (HasCallStack) => Text -> PublishRequest -> API (Either PublishError ())
 publish' token request = do
   url <- ask
   res <- liftIO $ postWith opts (url <> "/publish") body
   case res ^. responseStatus . statusCode of
-    400 -> pure IncorrectToken
-    201 -> pure PublishOK
+    400 -> pure $ Left IncorrectToken
+    201 -> pure $ Right ()
     s -> error $ "Unexpected status code on publish endpoint: " <> show s
   where
     body = A.toJSON request
@@ -120,7 +123,7 @@ solveChallenge Challenge {prefix, target} = go 0
     go n = go (n + 1)
 
 -- | Publish Lyrics (request and solve challenge)
-publish :: PublishRequest -> API PublishResponse
+publish :: (HasCallStack) => PublishRequest -> API (Either PublishError ())
 publish r = do
   c <- requestChallenge
   publish' (solveChallenge c) r
