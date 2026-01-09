@@ -6,7 +6,6 @@
 
 module LrcLib.Types
   ( API,
-    Url,
     SearchResponse,
     Challenge (..),
     GetError (..),
@@ -23,12 +22,10 @@ import Data.Aeson qualified as A
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
+import Network.HTTP.Client (Request)
 
--- | Representation of API url
-type Url = String
-
--- | Monad for API actions that includes API url
-type API = ReaderT Url IO
+-- | Monad for API actions that includes API url (as a base request)
+type API = ReaderT Request IO
 
 -- | Crypto proof-of-work challenge for publish
 data Challenge
