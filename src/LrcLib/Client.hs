@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -17,7 +18,6 @@ module LrcLib.Client
   )
 where
 
-import Control.Lens ((&), (&~), (.=), (.~), (^.))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask, runReaderT)
 import Crypto.Hash.SHA256 (hash)
@@ -26,13 +26,21 @@ import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Char8 qualified as BC
 import Data.ByteString.Lazy (ByteString)
 import Data.Either (fromRight)
-import Data.Foldable (toList)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import GHC.Stack
 import LrcLib.Types
-import Network.Wreq
+import Network.HTTP.Client
+  ( Request (method, path, queryString, requestBody, requestHeaders),
+    RequestBody (RequestBodyLBS),
+    Response (responseBody, responseStatus),
+    httpLbs,
+    httpNoBody,
+    parseRequest_,
+  )
+import Network.HTTP.Client.TLS (getGlobalManager)
+import Network.HTTP.Types (Status (statusCode), renderSimpleQuery)
 import Prelude hiding (id)
 
 decode :: (A.FromJSON a, HasCallStack) => ByteString -> a
@@ -41,34 +49,37 @@ decode x = case A.eitherDecode x of
   Right y -> y
 
 -- | Run API action with given API url
-runAPI :: Url -> API a -> IO a
+runAPI :: Request -> API a -> IO a
 runAPI url f = runReaderT f url
 
 -- | Run API action ('runAPI') with default API url
 --
 -- >>> runDefaultAPI $ getLyricsById 1337
--- OK Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
+-- Right Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
 runDefaultAPI :: API a -> IO a
-runDefaultAPI = runAPI "http://lrclib.net/api"
+runDefaultAPI = runAPI $ parseRequest_ "https://lrclib.net/api"
 
-getUrl ::
-  (HasCallStack) =>
-  String -> Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
-getUrl url track artist album duration = do
-  apiUrl <- ask
-  resp <- liftIO $ getWith opts $ apiUrl <> url
-  case resp ^. responseStatus . statusCode of
+get' :: String -> Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
+get' subpath track artist album duration = do
+  api <- ask
+  let req =
+        api
+          { path = api.path <> BC.pack subpath,
+            queryString =
+              renderSimpleQuery
+                False
+                [ ("track_name", encodeUtf8 track),
+                  ("artist_name", encodeUtf8 artist),
+                  ("album_name", encodeUtf8 album),
+                  ("duration", BC.pack $ show duration)
+                ]
+          }
+  man <- liftIO getGlobalManager
+  resp <- liftIO $ httpLbs req man
+  case resp.responseStatus.statusCode of
     404 -> pure $ Left NotFound
-    200 -> pure $ Right $ decode (resp ^. responseBody)
+    200 -> pure $ Right $ decode resp.responseBody
     s -> error $ "Unexpected status code on get endpoint: " <> show s
-  where
-    opts =
-      defaults &~ do
-        checkResponse .= (Just $ \_ _ -> pure ())
-        param "track_name" .= [track]
-        param "artist_name" .= [artist]
-        param "album_name" .= [album]
-        param "duration" .= [T.pack $ show duration]
 
 getLyrics,
   getCachedLyrics ::
@@ -82,11 +93,11 @@ getLyrics,
 --
 -- >>> runDefaultAPI $ getLyrics "Speak Français" "Ellis feat. NOËP" "Speak Français" 201
 -- Right Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
-getLyrics = getUrl "/get"
+getLyrics = get' "/get"
 
 -- | The same as 'getLyrics', but for cached lyrics.
 -- Calls @\/api\/get-cached@
-getCachedLyrics = getUrl "/get-cached"
+getCachedLyrics = get' "/get-cached"
 
 -- | Get lyrics by id
 -- Calls @\/api\/get\/\<id\>@
@@ -95,14 +106,14 @@ getCachedLyrics = getUrl "/get-cached"
 -- Right Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
 getLyricsById :: (HasCallStack) => Integer -> API (Either GetError TrackData)
 getLyricsById id = do
-  url <- ask
-  resp <- liftIO $ getWith opts $ url <> "/get/" <> show id
-  case resp ^. responseStatus . statusCode of
+  api <- ask
+  let req = api {path = api.path <> "/get/" <> BC.pack (show id)}
+  man <- liftIO getGlobalManager
+  resp <- liftIO $ httpLbs req man
+  case resp.responseStatus.statusCode of
     404 -> pure $ Left NotFound
-    200 -> pure $ Right $ decode (resp ^. responseBody)
+    200 -> pure $ Right $ decode resp.responseBody
     _ -> error "Unexpected status code on get endpoint"
-  where
-    opts = defaults &~ checkResponse .= (Just $ \_ _ -> pure ())
 
 -- | Search lyrics by either text query or track-artist-album
 -- Calls @\/api\/search@
@@ -111,31 +122,45 @@ getLyricsById id = do
 -- Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
 searchLyrics :: SearchQuery -> API SearchResponse
 searchLyrics q = do
-  url <- ask
-  resp <- liftIO $ getWith opts $ url <> "/search"
-  pure $ decode (resp ^. responseBody)
-  where
-    opts =
-      defaults &~ case q of
-        TextQuery t -> param "q" .= [t]
-        TrackQuery {..} -> do
-          param "track_name" .= [queryName]
-          param "artist_name" .= toList queryArtist
-          param "album_name" .= toList queryAlbum
+  api <- ask
+  let req =
+        api
+          { path = api.path <> "/search",
+            queryString = renderSimpleQuery False $
+              case q of
+                TextQuery t -> [("q", encodeUtf8 t)]
+                TrackQuery {..} ->
+                  [("track_name", encodeUtf8 queryName)]
+                    ++ [ ("artist_name", encodeUtf8 artist)
+                       | Just artist <- pure queryArtist
+                       ]
+                    ++ [ ("album_name", encodeUtf8 album)
+                       | Just album <- pure queryAlbum
+                       ]
+          }
+  man <- liftIO getGlobalManager
+  resp <- liftIO $ httpLbs req man
+  pure $ decode resp.responseBody
 
 -- | Publish Lyrics ('publish') without requesting and solving challenge
 -- Calls @\/api\/publish@
 publish' :: (HasCallStack) => PublishToken -> PublishRequest -> API (Either PublishError ())
 publish' token request = do
-  url <- ask
-  res <- liftIO $ postWith opts (url <> "/publish") body
-  case res ^. responseStatus . statusCode of
+  api <- ask
+  let req =
+        api
+          { method = "POST",
+            path = api.path <> "/publish",
+            requestHeaders =
+              api.requestHeaders <> [("X-Publish-Token", encodeUtf8 token)],
+            requestBody = RequestBodyLBS $ A.encode request
+          }
+  man <- liftIO getGlobalManager
+  res <- liftIO $ httpNoBody req man
+  case res.responseStatus.statusCode of
     400 -> pure $ Left IncorrectToken
     201 -> pure $ Right ()
     s -> error $ "Unexpected status code on publish endpoint: " <> show s
-  where
-    body = A.toJSON request
-    opts = defaults & header "X-Publish-Token" .~ [encodeUtf8 token]
 
 -- | Request proof-of-work challenge for publish
 -- Calls @\/api\/request-challenge@
@@ -144,9 +169,11 @@ publish' token request = do
 -- Challenge {prefix = "BVNC...XoVu1H", target = "000000FF0...00000"}
 requestChallenge :: API Challenge
 requestChallenge = do
-  url <- ask
-  resp <- liftIO $ post (url <> "/request-challenge") $ A.toJSON ()
-  pure $ decode (resp ^. responseBody)
+  api <- ask
+  let req = api {method = "POST", path = api.path <> "/request-challenge"}
+  man <- liftIO getGlobalManager
+  resp <- liftIO $ httpLbs req man
+  pure $ decode resp.responseBody
 
 -- | Solve proof-of-work challenge for publish
 -- Solution is a one-time publish token
