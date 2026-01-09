@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -18,32 +19,28 @@ module LrcLib.Client
   )
 where
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ask, runReaderT)
+import Control.Monad.Reader (runReaderT)
 import Crypto.Hash.SHA256 (hash)
 import Data.Aeson qualified as A
+import Data.ByteString (ByteString)
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Char8 qualified as BC
-import Data.ByteString.Lazy (ByteString)
 import Data.Either (fromRight)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
 import GHC.Stack
+import LrcLib.HTTP as HTTP
 import LrcLib.Types
 import Network.HTTP.Client
-  ( Request (method, path, queryString, requestBody, requestHeaders),
-    RequestBody (RequestBodyLBS),
+  ( Request,
     Response (responseBody, responseStatus),
-    httpLbs,
-    httpNoBody,
     parseRequest_,
   )
-import Network.HTTP.Client.TLS (getGlobalManager)
-import Network.HTTP.Types (Status (statusCode), renderSimpleQuery)
+import Network.HTTP.Types (Status (statusCode))
 import Prelude hiding (id)
 
-decode :: (A.FromJSON a, HasCallStack) => ByteString -> a
+decode :: (A.FromJSON a, HasCallStack) => ByteStringL -> a
 decode x = case A.eitherDecode x of
   Left err -> error $ "Error while decoding JSON: " <> err
   Right y -> y
@@ -59,27 +56,20 @@ runAPI url f = runReaderT f url
 runDefaultAPI :: API a -> IO a
 runDefaultAPI = runAPI $ parseRequest_ "https://lrclib.net/api"
 
-get' :: String -> Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
+get' :: ByteString -> Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
 get' subpath track artist album duration = do
-  api <- ask
-  let req =
-        api
-          { path = api.path <> BC.pack subpath,
-            queryString =
-              renderSimpleQuery
-                False
-                [ ("track_name", encodeUtf8 track),
-                  ("artist_name", encodeUtf8 artist),
-                  ("album_name", encodeUtf8 album),
-                  ("duration", BC.pack $ show duration)
-                ]
-          }
-  man <- liftIO getGlobalManager
-  resp <- liftIO $ httpLbs req man
+  resp <- HTTP.get subpath query
   case resp.responseStatus.statusCode of
     404 -> pure $ Left NotFound
     200 -> pure $ Right $ decode resp.responseBody
     s -> error $ "Unexpected status code on get endpoint: " <> show s
+  where
+    query =
+      [ ("track_name", track),
+        ("artist_name", artist),
+        ("album_name", album),
+        ("duration", T.show duration)
+      ]
 
 getLyrics,
   getCachedLyrics ::
@@ -106,10 +96,7 @@ getCachedLyrics = get' "/get-cached"
 -- Right Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
 getLyricsById :: (HasCallStack) => Integer -> API (Either GetError TrackData)
 getLyricsById id = do
-  api <- ask
-  let req = api {path = api.path <> "/get/" <> BC.pack (show id)}
-  man <- liftIO getGlobalManager
-  resp <- liftIO $ httpLbs req man
+  resp <- HTTP.get ("/get/" <> BC.pack (show id)) []
   case resp.responseStatus.statusCode of
     404 -> pure $ Left NotFound
     200 -> pure $ Right $ decode resp.responseBody
@@ -122,42 +109,24 @@ getLyricsById id = do
 -- Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
 searchLyrics :: SearchQuery -> API SearchResponse
 searchLyrics q = do
-  api <- ask
-  let req =
-        api
-          { path = api.path <> "/search",
-            queryString = renderSimpleQuery False $
-              case q of
-                TextQuery t -> [("q", encodeUtf8 t)]
-                TrackQuery {..} ->
-                  [("track_name", encodeUtf8 queryName)]
-                    ++ [ ("artist_name", encodeUtf8 artist)
-                       | Just artist <- pure queryArtist
-                       ]
-                    ++ [ ("album_name", encodeUtf8 album)
-                       | Just album <- pure queryAlbum
-                       ]
-          }
-  man <- liftIO getGlobalManager
-  resp <- liftIO $ httpLbs req man
+  resp <- HTTP.get "/search" query
   pure $ decode resp.responseBody
+  where
+    query = case q of
+      TextQuery t -> [("q", t)]
+      TrackQuery {..} ->
+        [("track_name", queryName)]
+          ++ [("artist_name", artist) | Just artist <- pure queryArtist]
+          ++ [("album_name", album) | Just album <- pure queryAlbum]
 
 -- | Publish Lyrics ('publish') without requesting and solving challenge
 -- Calls @\/api\/publish@
 publish' :: (HasCallStack) => PublishToken -> PublishRequest -> API (Either PublishError ())
 publish' token request = do
-  api <- ask
-  let req =
-        api
-          { method = "POST",
-            path = api.path <> "/publish",
-            requestHeaders =
-              api.requestHeaders <> [("X-Publish-Token", encodeUtf8 token)],
-            requestBody = RequestBodyLBS $ A.encode request
-          }
-  man <- liftIO getGlobalManager
-  res <- liftIO $ httpNoBody req man
-  case res.responseStatus.statusCode of
+  resp <-
+    HTTP.post "/publish" [("X-Publish-Token", encodeUtf8 token)] $
+      A.encode request
+  case resp.responseStatus.statusCode of
     400 -> pure $ Left IncorrectToken
     201 -> pure $ Right ()
     s -> error $ "Unexpected status code on publish endpoint: " <> show s
@@ -169,10 +138,7 @@ publish' token request = do
 -- Challenge {prefix = "BVNC...XoVu1H", target = "000000FF0...00000"}
 requestChallenge :: API Challenge
 requestChallenge = do
-  api <- ask
-  let req = api {method = "POST", path = api.path <> "/request-challenge"}
-  man <- liftIO getGlobalManager
-  resp <- liftIO $ httpLbs req man
+  resp <- HTTP.post "/request-challenge" [] ""
   pure $ decode resp.responseBody
 
 -- | Solve proof-of-work challenge for publish
