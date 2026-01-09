@@ -1,7 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 -- | Module for calling LRCLIB API (<https://lrclib.net/docs>)
 module LrcLib.Client
@@ -26,6 +25,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 qualified as B16
 import Data.ByteString.Char8 qualified as BC
 import Data.Either (fromRight)
+import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.Encoding (encodeUtf8)
@@ -114,10 +114,9 @@ searchLyrics q = do
   where
     query = case q of
       TextQuery t -> [("q", t)]
-      TrackQuery {..} ->
-        [("track_name", queryName)]
-          ++ [("artist_name", artist) | Just artist <- pure queryArtist]
-          ++ [("album_name", album) | Just album <- pure queryAlbum]
+      TrackQuery {track, artist, album} ->
+        ("track_name", track)
+          : catMaybes [("artist_name",) <$> artist, ("album_name",) <$> album]
 
 -- | Publish Lyrics ('publish') without requesting and solving challenge
 -- Calls @\/api\/publish@
