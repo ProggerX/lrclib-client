@@ -28,6 +28,7 @@ common warnings
 library
   import:           warnings
   exposed-modules:  LrcLib.Client, LrcLib.Types
+  other-modules:    LrcLib.HTTP
   build-depends:    aeson >= 2.2.3 && < 2.3,
                     base >= 4.19 && < 4.21,
                     base16-bytestring >= 1.0.2 && < 1.1,
