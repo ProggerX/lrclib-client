@@ -5,16 +5,16 @@
 -- | Module for calling LRCLIB API (<https://lrclib.net/docs>)
 module LrcLib.Client
   ( module LrcLib.Types,
+    runAPI,
+    runDefaultAPI,
     getLyrics,
     getCachedLyrics,
     getLyricsById,
-    requestChallenge,
     searchLyrics,
     publish',
-    solveChallenge,
     publish,
-    runAPI,
-    runDefaultAPI,
+    requestChallenge,
+    solveChallenge,
   )
 where
 
