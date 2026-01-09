@@ -1,7 +1,7 @@
 cabal-version:      3.0
 
 name:               lrclib-client
-version:            0.2.1
+version:            0.2.2
 synopsis:           A Haskell client for the LrcLib API (lyrics database)
 description:
   This library provides types and functions to interact with the
@@ -39,12 +39,12 @@ library
                     wreq >= 0.5.4 && < 0.6,
 
   hs-source-dirs:   src
-  default-language: GHC2021
+  default-language: GHC2024
 
 test-suite test
-  import: warnings
+  import:           warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Main.hs
   build-depends:    aeson, base, bytestring, tasty, tasty-hunit, lrclib-client
-  default-language: GHC2021
+  default-language: GHC2024

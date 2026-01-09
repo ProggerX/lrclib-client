@@ -13,6 +13,7 @@ module LrcLib.Types
     TrackData (..),
     SearchQuery (..),
     PublishError (..),
+    PublishToken,
     PublishRequest (..),
   )
 where
@@ -44,7 +45,7 @@ data TrackData
     trackName :: Text,
     artistName :: Text,
     albumName :: Text,
-    duration :: Integer,
+    duration :: Float,
     instrumental :: Bool,
     plainLyrics :: Maybe Text,
     syncedLyrics :: Maybe Text
@@ -55,13 +56,15 @@ data TrackData
 data GetError = NotFound
   deriving (Generic, A.FromJSON, Show)
 
+type PublishToken = Text
+
 -- | Representation of request for publishing lyrics
 data PublishRequest
   = PublishRequest
   { trackName :: Text,
     artistName :: Text,
     albumName :: Text,
-    duration :: Integer,
+    duration :: Float,
     plainLyrics :: Text,
     syncedLyrics :: Text
   }
