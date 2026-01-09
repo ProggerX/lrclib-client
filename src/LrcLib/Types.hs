@@ -74,9 +74,9 @@ data PublishError = IncorrectToken
 data SearchQuery
   = TextQuery Text
   | TrackQuery
-      { queryName :: Text,
-        queryArtist :: Maybe Text,
-        queryAlbum :: Maybe Text
+      { track :: Text,
+        artist :: Maybe Text,
+        album :: Maybe Text
       }
 
 -- | Response when searching lyrics
