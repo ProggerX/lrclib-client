@@ -9,11 +9,11 @@ module LrcLib.Types
     Url,
     SearchResponse,
     Challenge (..),
-    GetResponse (..),
+    GetError (..),
     TrackData (..),
     SearchQuery (..),
+    PublishError (..),
     PublishToken,
-    PublishResponse (..),
     PublishRequest (..),
   )
 where
@@ -52,10 +52,8 @@ data TrackData
   }
   deriving (A.FromJSON, Generic, Eq, Read)
 
--- | Response when getting lyrics
-data GetResponse
-  = NotFound
-  | OK TrackData
+-- | Error when getting lyrics
+data GetError = NotFound
   deriving (Generic, A.FromJSON, Show)
 
 type PublishToken = Text
@@ -72,8 +70,8 @@ data PublishRequest
   }
   deriving (Generic, A.ToJSON)
 
--- | Response when publishing lyrics
-data PublishResponse = PublishOK | IncorrectToken
+-- | Error when publishing lyrics
+data PublishError = IncorrectToken
 
 -- | Query for search. Either text or track+artist+album
 data SearchQuery

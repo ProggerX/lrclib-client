@@ -51,13 +51,15 @@ runAPI url f = runReaderT f url
 runDefaultAPI :: API a -> IO a
 runDefaultAPI = runAPI "http://lrclib.net/api"
 
-getUrl :: String -> Text -> Text -> Text -> Integer -> API GetResponse
+getUrl ::
+  (HasCallStack) =>
+  String -> Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
 getUrl url track artist album duration = do
   apiUrl <- ask
   resp <- liftIO $ getWith opts $ apiUrl <> url
   case resp ^. responseStatus . statusCode of
-    404 -> pure NotFound
-    200 -> pure $ OK $ decode (resp ^. responseBody)
+    404 -> pure $ Left NotFound
+    200 -> pure $ Right $ decode (resp ^. responseBody)
     s -> error $ "Unexpected status code on get endpoint: " <> show s
   where
     opts =
@@ -68,16 +70,17 @@ getUrl url track artist album duration = do
         param "album_name" .= [album]
         param "duration" .= [T.pack $ show duration]
 
-getLyrics, getCachedLyrics :: Text -> Text -> Text -> Integer -> API GetResponse
+getLyrics, getCachedLyrics ::
+  Text -> Text -> Text -> Integer -> API (Either GetError TrackData)
 
 -- | Get lyrics by track name, artist, album and duration
 -- Calls @\/api\/get@
 --
 -- >>> runDefaultAPI $ getLyrics "ThisTrackDoesntExist" "UnknownArtist" "UnknownAlbum" 1337
--- NotFound
+-- Left NotFound
 --
 -- >>> runDefaultAPI $ getLyrics "Speak Français" "Ellis feat. NOËP" "Speak Français" 201
--- OK Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
+-- Right Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
 getLyrics = getUrl "/get"
 
 -- | The same as 'getLyrics', but for cached lyrics.
@@ -88,14 +91,14 @@ getCachedLyrics = getUrl "/get-cached"
 -- Calls @\/api\/get\/\<id\>@
 --
 -- >>> runDefaultAPI $ getLyricsById 1337
--- OK Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
-getLyricsById :: Integer -> API GetResponse
-getLyricsById id' = do
+-- Right Track, id: 1337, name: Speak Français, artist: Ellis feat. NOËP, album: Speak Français
+getLyricsById :: (HasCallStack) => Integer -> API (Either GetError TrackData)
+getLyricsById id = do
   url <- ask
-  resp <- liftIO $ getWith opts $ url <> "/get/" <> show id'
+  resp <- liftIO $ getWith opts $ url <> "/get/" <> show id
   case resp ^. responseStatus . statusCode of
-    404 -> pure NotFound
-    200 -> pure $ OK $ decode (resp ^. responseBody)
+    404 -> pure $ Left NotFound
+    200 -> pure $ Right $ decode (resp ^. responseBody)
     _ -> error "Unexpected status code on get endpoint"
   where
     opts = defaults &~ checkResponse .= (Just $ \_ _ -> pure ())
@@ -119,15 +122,22 @@ searchLyrics q = do
           param "artist_name" .= toList queryArtist
           param "album_name" .= toList queryAlbum
 
+-- | Request proof-of-work challenge for publish
+requestChallenge :: API Challenge
+requestChallenge = do
+  url <- ask
+  resp <- liftIO $ post (url <> "/request-challenge") $ A.toJSON ()
+  pure $ decode (resp ^. responseBody)
+
 -- | Publish Lyrics ('publish') without requesting and solving challenge
 -- Calls @\/api\/publish@
-publish' :: PublishToken -> PublishRequest -> API PublishResponse
+publish' :: (HasCallStack) => PublishToken -> PublishRequest -> API (Either PublishError ())
 publish' token request = do
   url <- ask
   res <- liftIO $ postWith opts (url <> "/publish") body
   case res ^. responseStatus . statusCode of
-    400 -> pure IncorrectToken
-    201 -> pure PublishOK
+    400 -> pure $ Left IncorrectToken
+    201 -> pure $ Right ()
     s -> error $ "Unexpected status code on publish endpoint: " <> show s
   where
     body = A.toJSON request
@@ -144,13 +154,6 @@ requestChallenge = do
   resp <- liftIO $ post (url <> "/request-challenge") $ A.toJSON ()
   pure $ decode (resp ^. responseBody)
 
--- | Publish Lyrics (request and solve challenge)
--- Calls @\/api\/publish@
-publish :: PublishRequest -> API PublishResponse
-publish r = do
-  c <- requestChallenge
-  publish' (solveChallenge c) r
-
 -- | Solve proof-of-work challenge for publish
 -- Solution is a one-time publish token
 solveChallenge :: Challenge -> Text
@@ -161,3 +164,10 @@ solveChallenge Challenge {prefix, target} = go 0
     go :: Int -> Text
     go n | hash (prefix' <> BC.pack (show n)) < target' = prefix <> ":" <> T.show n
     go n = go (n + 1)
+
+-- | Publish Lyrics (request and solve challenge)
+-- Calls @\/api\/publish@
+publish :: (HasCallStack) => PublishRequest -> API (Either PublishError ())
+publish r = do
+  c <- requestChallenge
+  publish' (solveChallenge c) r
