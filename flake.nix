@@ -12,11 +12,14 @@
       systems = nixpkgs.lib.platforms.unix;
       perSystem = {pkgs, ...}: let
         hpkgs = pkgs.haskellPackages;
-        pkg = hpkgs.callCabal2nix "light" ./. {};
-      in {
-        packages.default = pkg;
-        devShells.default = hpkgs.developPackage {
+        opts = {
           root = ./.;
+          source-overrides = {}; # Put overrides here
+        };
+        pkg = op': hpkgs.developPackage (opts // op');
+      in {
+        packages.default = pkg {};
+        devShells.default = pkg {
           returnShellEnv = true;
           modifier = drv:
             pkgs.haskell.lib.addBuildTools drv (with pkgs; [
