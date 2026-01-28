@@ -1,7 +1,7 @@
 cabal-version:      3.0
 
 name:               lrclib-client
-version:            0.3.0
+version:            0.3.1
 synopsis:           A Haskell client for the LrcLib API (lyrics database)
 description:
   This library provides types and functions to interact with the
@@ -17,6 +17,7 @@ maintainer:         Sand Gurt <x@proggers.ru>
 copyright:          2026 Sand Gurt <x@proggers.ru>
 category:           Music, Web, API
 build-type:         Simple
+extra-source-files: ./test/*.json, ./test/*.txt
 
 source-repository head
   type:             git

@@ -14,7 +14,7 @@ import Test.Tasty.HUnit
 decodeTest :: forall (a :: Type). (FromJSON a, Eq a, Read a, Show a) => FilePath -> TestTree
 decodeTest file = testCase file $ do
   decoded <- fromJust . decode @a <$> BS.readFile (file <> ".json")
-  expected <- read @a <$> readFile file
+  expected <- read @a <$> readFile (file <> ".txt")
   decoded @?= expected
 
 main :: IO ()
